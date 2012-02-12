@@ -34,19 +34,15 @@ void t_ks0108::init(void)
     selectSide(LEFT);
     writeInstruction(DISPLAY_OFF);
     writeInstruction(START_LINE);
-    writeInstruction(X_ADRESS);
-    writeInstruction(Y_ADRESS);
     writeInstruction(DISPLAY_ON);
     
     selectSide(RIGHT);
     writeInstruction(DISPLAY_OFF);
     writeInstruction(START_LINE);
-    writeInstruction(X_ADRESS);
-    writeInstruction(Y_ADRESS);
     writeInstruction(DISPLAY_ON);
-    
+
     clearScreen();
-    posx = posy = 0;
+    gotoXY(0,0);
 }
 
 void t_ks0108::selectSide(e_side side)
@@ -76,7 +72,7 @@ void t_ks0108::writeInstruction(uint8_t instruction)
     PORT(DATA_PORT) = instruction;
     
     SETPIN(E_PORT, E_PIN);
-    _delay_ms(1);
+    _delay_us(10);
     CLEARPIN(E_PORT, E_PIN);
 }
 
@@ -89,7 +85,7 @@ void t_ks0108::writeData(uint8_t data)
     PORT(DATA_PORT) = data;
     
     SETPIN(E_PORT, E_PIN);
-    _delay_ms(1);
+    _delay_us(10);
     CLEARPIN(E_PORT, E_PIN);
 }
 
@@ -105,7 +101,6 @@ void t_ks0108::writeString(char *string)
 void t_ks0108::putChar(uint8_t ch)
 {
     const uint8_t charWidth = 5;
-    uint8_t rightSide = 0;
     if(posx > 128 - charWidth)
     {
         posx = 0;
@@ -114,26 +109,11 @@ void t_ks0108::putChar(uint8_t ch)
             posy = 0;
         
     }
-    if(posx < 64)
-    {
-        selectSide(LEFT);
-    }
-    else
-    {
-        selectSide(RIGHT);
-        rightSide = 64;
-    }
-
-    writeInstruction(X_ADRESS + posx - rightSide);
-    writeInstruction(Y_ADRESS + posy);
-
+    gotoXY(posx, posy);
     for(uint8_t i = 0; i != 5; ++i)
     {
         if(posx == 64)
-        {
-            selectSide(RIGHT);
-            writeInstruction(Y_ADRESS + posy);
-        }
+            gotoXY(posx, posy);
         writeData(pgm_read_byte(&System5x7[((ch - 32)*5)+i]));
         ++posx;
     }
@@ -151,7 +131,7 @@ void t_ks0108::waitBusy(void)
     SETPIN(RW_PORT, RW_PIN);
 
     SETPIN(E_PORT, E_PIN);
-    _delay_ms(1);
+    _delay_us(10);
     CLEARPIN(E_PORT, E_PIN);
 
     while((0x80 & PIND))
@@ -163,8 +143,67 @@ void t_ks0108::waitBusy(void)
 
 void t_ks0108::gotoXY(uint8_t x, uint8_t y)
 {
+    uint8_t rOffset = 0;
     posx = x;
     posy = y;
+    if(posx >= 64)
+    {
+        selectSide(RIGHT);
+        rOffset = 64;
+    }
+    else
+        selectSide(LEFT);
+
+    writeInstruction(X_ADRESS + posx - rOffset); 
+    writeInstruction(Y_ADRESS + y);
+}
+
+void t_ks0108::drawRectangle(uint8_t startX, uint8_t startY, uint8_t endX, uint8_t endY)
+{
+    //NOTE: This function does not preserve any data, rows startY and endY will be wiped.
+    //Sanitycheck
+    if(startX >= 128 || endX >= 128 || startY >= 8 || endY >= 8)
+        return;
+    
+    //Flip start and end if start > end
+    if(startX > endX)
+    {
+        uint8_t temp = startX;
+        startX = endX;
+        endX = temp;
+    }
+    if(startY > endY)
+    {
+        uint8_t temp = startY;
+        startY = endY;
+        endY = temp;
+    }
+
+    drawHorizontalLine(startX, startY, 0x00, endX - startX);
+    drawHorizontalLine(startX, endY, 7, endX - startX);
+    
+    for(uint8_t i = startY; i != endY +1; ++i)
+    {
+        gotoXY(startX, i);
+        writeData(0xFF);
+        gotoXY(endX, i);
+        writeData(0xFF);
+    }
+}
+
+void t_ks0108::drawHorizontalLine(uint8_t startX, uint8_t page, uint8_t bit, uint8_t length)
+{
+    //Sanitycheck
+    if(startX >= 128 || page >= 8 || bit >= 8 || startX+length >= 128)
+        return;
+
+    gotoXY(startX, page);
+    for(uint8_t i = startX; i != startX + length; ++i)
+    {
+        if(i == 64)
+            gotoXY(i, page);
+        writeData(1 << bit);
+    }
 }
 
 uint8_t t_ks0108::readData(uint8_t x, uint8_t y)
@@ -173,40 +212,33 @@ uint8_t t_ks0108::readData(uint8_t x, uint8_t y)
     if(x >= 128 || y >= 8)
         return 0;
 
-    uint8_t rOffset = 0;
-
-    //check for left or right side
-    if(x >= 64)
-    {
-        rOffset = 64;
-        selectSide(RIGHT);
-    }
-    else
-        selectSide(LEFT);
-    
     //Goto destination
-    writeInstruction(X_ADRESS + x - rOffset);
-    writeInstruction(Y_ADRESS + y);
+    gotoXY(x, y);
 
+    //Wait til LCD is ready
     waitBusy();
 
-    //Port is in input mode
+    //Put data port in input mode
     DDR(DATA_PORT) = 0;
 
     //Both high = Data Read command
     SETPIN(RS_PORT, RS_PIN);
     SETPIN(RW_PORT, RW_PIN);
     
+    //Send command, this is a dummy read
     SETPIN(E_PORT, E_PIN);
-    _delay_ms(1);
+    _delay_us(10);
     CLEARPIN(E_PORT, E_PIN);
 
-    //Send command twice, first is a dummy
+    //Send command again
     SETPIN(E_PORT, E_PIN);
-    _delay_ms(1);
+    _delay_us(10);
     CLEARPIN(E_PORT, E_PIN);
 
+    //And here is our data
     uint8_t retValue = PIN(DATA_PORT);
+
+    //Data port is output again
     DDR(DATA_PORT) = 255;
     return retValue;
 }
@@ -214,18 +246,13 @@ uint8_t t_ks0108::readData(uint8_t x, uint8_t y)
 void t_ks0108::setBit(uint8_t x, uint8_t y, uint8_t bit)
 {
     //Sanitycheck
-    uint8_t rOffset = 0;
     if(x >= 128 || y >= 8 || bit >= 8)
         return;
     
-    if(x >= 64)
-        rOffset = 64;
     uint8_t data = readData(x, y);
     data |= (1 << bit);
 
-    writeInstruction(X_ADRESS + x - rOffset);
-    writeInstruction(Y_ADRESS + y);
-
+    gotoXY(x, y);
     writeData(data);
 }
 
@@ -241,8 +268,7 @@ void t_ks0108::clearSide(e_side side)
     selectSide(side);
     for(uint8_t i = 0; i != 8; ++i)
     {
-        writeInstruction(Y_ADRESS | i);
-        writeInstruction(X_ADRESS);
+        writeInstruction(Y_ADRESS + i);
         for(uint8_t t = 0; t != 64; ++t)
             writeData(0x00);
     }

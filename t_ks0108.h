@@ -163,6 +163,8 @@ class t_ks0108
         void                writeString(char *string);
         void                gotoXY(uint8_t x, uint8_t y);
         void                setBit(uint8_t x, uint8_t y, uint8_t bit);
+        void                drawRectangle(uint8_t startX, uint8_t startY, uint8_t endX, uint8_t endY);
+        void                drawHorizontalLine(uint8_t startX, uint8_t page, uint8_t bit, uint8_t length);
         void                clearScreen(void);
         void                clearSide(e_side side);
         void                waitBusy(void);

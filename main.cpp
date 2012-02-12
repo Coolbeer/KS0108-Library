@@ -12,10 +12,7 @@ int main(void)
     lcd.gotoXY(20, 4);
     lcd.writeString((char*)"Some text here");
     
-    for(uint8_t i = 0; i != 127; ++i)
-    {
-        lcd.setBit(i, 3, 7);
-    }
+    lcd.drawRectangle(0,0,127,7);
     while(true)
     {
         asm volatile ( "nop" );

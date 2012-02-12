@@ -89,18 +89,21 @@ void t_ks0108::writeData(uint8_t data)
     CLEARPIN(E_PORT, E_PIN);
 }
 
-void t_ks0108::writeString(char *string)
+void t_ks0108::writeString(char *string, text_modifiers mod)
 {
     while(*string != 0)
     {
-        putChar(*string);
+        putChar(*string, mod);
         ++string;
     }
 }
 
-void t_ks0108::putChar(uint8_t ch)
+void t_ks0108::putChar(uint8_t ch, text_modifiers mod)
 {
     const uint8_t charWidth = 5;
+    uint8_t mods = 0;
+    if(mod == UNDERLINE)
+        mods = 0x80;
     if(posx > 128 - charWidth)
     {
         posx = 0;
@@ -114,12 +117,12 @@ void t_ks0108::putChar(uint8_t ch)
     {
         if(posx == 64)
             gotoXY(posx, posy);
-        writeData(pgm_read_byte(&System5x7[((ch - 32)*5)+i]));
+        writeData(pgm_read_byte(&System5x7[((ch - 32)*5)+i])|mods);
         ++posx;
     }
     if(posx != 128)
     {
-        writeData(0x00); //One space between letters
+        writeData(0x00|mods); //One space between letters
         ++posx;
     }
 }
@@ -134,7 +137,7 @@ void t_ks0108::waitBusy(void)
     _delay_us(10);
     CLEARPIN(E_PORT, E_PIN);
 
-    while((0x80 & PIND))
+    while(0x80 & PIN(DATA_PORT))
         asm volatile ( "nop" );
 
     DDR(DATA_PORT) = 255;

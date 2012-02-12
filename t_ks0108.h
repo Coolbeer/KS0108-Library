@@ -151,6 +151,7 @@ const uint8_t System5x7[] PROGMEM = {
 };
 
 enum e_side {LEFT, RIGHT};
+enum text_modifiers {NONE, UNDERLINE};
 
 class t_ks0108
 {
@@ -159,8 +160,8 @@ class t_ks0108
         void                writeInstruction(uint8_t instruction);
         void                writeData(uint8_t data);
         uint8_t             readData(uint8_t x, uint8_t y);
-        void                putChar(uint8_t ch);
-        void                writeString(char *string);
+        void                putChar(uint8_t ch, text_modifiers mod = NONE);
+        void                writeString(char *string, text_modifiers mod = NONE);
         void                gotoXY(uint8_t x, uint8_t y);
         void                setBit(uint8_t x, uint8_t y, uint8_t bit);
         void                drawRectangle(uint8_t startX, uint8_t startY, uint8_t endX, uint8_t endY);
